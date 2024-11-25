@@ -1,2 +1,2 @@
-# SOL_lib
-sign for SOL
+# DOT_lib
+sign lib for DOT 
