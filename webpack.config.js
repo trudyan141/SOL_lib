@@ -3,9 +3,9 @@ const webpack = require('webpack');
 module.exports = {
   entry: './src/index.js',
   output: {
-    filename: 'solLib.js',
+    filename: 'signSOL.js',
     path: path.resolve(__dirname, 'dist'),
-    library: 'solLib',
+    library: 'signSOL',
     libraryTarget: 'umd',
     globalObject: 'this',
   },
