@@ -6,12 +6,16 @@ const { derivePath } = require("ed25519-hd-key");
 const BigNumber = require("bignumber.js");
 const axios = require("axios");
 const web3 = require("@solana/web3.js");
+const { getStakeActivation } = require('@anza-xyz/solana-rpc-get-stake-activation');
+console.log("🚀 ~ getStakeActivation:", getStakeActivation)
 const { forEachSeries } = require("p-iteration");
 
-const { LAMPORTS_PER_SOL } = web3;
+const { LAMPORTS_PER_SOL, Transaction, SystemProgram , PublicKey} = web3;
 const MEMO_PROGRAM_ID = new web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 const solScanApiUrl = process.env.SOL_SCAN_API_URL || "https://api.solscan.io";
-const solApiUrl = process.env.SOL_API_URL || "https://api.mainnet-beta.solana.com";
+
+const solApiUrl = "https://yolo-floral-sunset.solana-mainnet.quiknode.pro/74af7c1a9bf7646d4ba5e9c4cce6446f528ce25a";
+
 const solCluster = process.env.SOL_CLUSTER || "";
 const rateLimit = parseFloat(process.env.SOL_RATE_LIMIT || "40");
 let numOfTasks = parseInt(process.env.SOL_NUM_OF_TASKS || "5");
@@ -21,7 +25,7 @@ let minimumBalanceForRentExemption = 2282880;
 let minimumStakeAmount = 0.01;
 
 const cache = {};
-let apiUrl = solApiUrl;
+let apiUrl = solApiUrl
 
 const _getConnection = () => {
   const key = [
@@ -51,7 +55,6 @@ function setSolApiUrl(configApiUrl) {
 }
 
 async function setConfigSol(config) {
-  console.log("🚀 ~ setConfigSol ~ config:", config)
   if (!config) {
     return;
   }
@@ -95,12 +98,11 @@ const generateKeySol = async (mnemonic, passphrase = "", path = "m/44'/501'/0'/0
     if (path) {
       seed = derivePath(path, seed).key;
     }
-     console.log(nacl,'nacl=>generateKeySol');
+    const keyPair = nacl.sign.keyPair.fromSeed(seed);
     const account = new web3.Account(nacl.sign.keyPair.fromSeed(seed).secretKey);
-    console.log(account,'account=>generateKeySol');
     return {
-      privateKey: bs58.encode(account._keypair.secretKey),
-      address: bs58.encode(account._keypair.publicKey),
+      privateKey: bs58?.default?.encode(account._secretKey),
+      address: bs58?.default?.encode(account._publicKey),
       // privateKey: bs58.encode(account._secretKey),
       // address: bs58.encode(account._publicKey),
       hdPath: path
@@ -110,13 +112,29 @@ const generateKeySol = async (mnemonic, passphrase = "", path = "m/44'/501'/0'/0
   }
 };
 
-const getFeeSol = async () => {
+const getFeeSol = async (from, to, amount) => {
   try {
+    if (!to) {
+      to = from;
+    }
     const connection = _getConnection();
-    const block = await connection.getRecentBlockhash();
-    console.log("🚀 ~ getFeeSol ~ block:", block)
+    console.log("🚀 ~ getFeeSol ~ connection:", connection)
+    const latestBlockHash = await connection.getLatestBlockhash();
+    console.log("🚀 ~ getFeeSol ~ latestBlockHash:", latestBlockHash)
+    const manualTransaction = new web3.Transaction({
+      recentBlockhash: latestBlockHash.blockhash,
+      feePayer: new web3.PublicKey(from)
+    });
+    manualTransaction.add(web3.SystemProgram.transfer({
+      fromPubkey: new web3.PublicKey(from),
+      toPubkey: new web3.PublicKey(to),
+      lamports: BigNumber(amount || 1).times(LAMPORTS_PER_SOL).toFixed(0),
+    }));
+       console.log("🚀 ~ getFeeSol ~ manualTransaction:", manualTransaction)
+    const fees = await manualTransaction.getEstimatedFee(connection);
+    console.log("🚀 ~ getFeeSol ~ fees:", fees)
 
-    return BigNumber(block.feeCalculator.lamportsPerSignature).div(LAMPORTS_PER_SOL).toFixed();
+    return BigNumber(fees).div(LAMPORTS_PER_SOL).toFixed();
   } catch (error) {
     console.log("🚀 ~ getFeeSol ~ error:", error)
     return null;
@@ -127,7 +145,6 @@ const transferSol = async (from, to, amount, privateKey) => {
   try {
     const connection = _getConnection();
     const latestBlockHash = await connection.getLatestBlockhash();
-    console.log(latestBlockHash,'latestBlockHash');
     const manualTransaction = new web3.Transaction({
       recentBlockhash: latestBlockHash.blockhash,
       feePayer: new web3.PublicKey(from)
@@ -151,9 +168,13 @@ const transferSol = async (from, to, amount, privateKey) => {
 const _signTransaction = async (transaction, publicKey, privateKey) => {
   try {
     const transactionBuffer = transaction.serializeMessage();
-     console.log(transactionBuffer,'transactionBuffer');
-    const signature = nacl.sign.detached(transactionBuffer, bs58.decode(privateKey));
-      console.log(signature,'signature');
+    const secretKey32Bytes = bs58?.default?.decode(privateKey);
+    // get keyPair
+    const keyPair = nacl.sign.keyPair.fromSeed(secretKey32Bytes);
+
+    // get secretKey (64 bytes)
+    const secretKey64Bytes = keyPair.secretKey;
+    const signature = nacl.sign.detached(transactionBuffer,secretKey64Bytes);
     transaction.addSignature(publicKey, signature);
     const isVerifiedSignature = transaction.verifySignatures();
     
@@ -409,6 +430,7 @@ async function getRentExemptionForSystemAccount() {
 
 async function checkSendAmountSol(from, to, amount) {
   amount = new BigNumber(amount);
+  console.log("🚀 ~ checkSendAmountSol ~ amount:", amount)
   let minAmount = new BigNumber(minSendAmount);
   let maxAmount = new BigNumber(0);
   const errorCode = null;
@@ -442,7 +464,7 @@ async function checkSendAmountSol(from, to, amount) {
     };
   }
 
-  const fee = new BigNumber(await getFeeSol());
+  const fee = new BigNumber(await getFeeSol(from,to, amount));
   let availbleCanSendAmount = fromBalance.minus(fee);
   if (availbleCanSendAmount.gt(0)) {
     let hasRentAmount = false;
@@ -509,7 +531,8 @@ async function createStakeTx({
   votePubkey,
   memo,
 }) {
-  const wallet = privateKey ? new web3.Account(bs58.decode(privateKey)) : web3.Keypair.generate();
+  const wallet = privateKey ? new web3.Account(bs58?.default?.decode(privateKey)) : web3.Keypair.generate();
+  console.log("🚀 ~ wallet:", wallet)
   // Setup a transaction to create our stake account
   // Note: `StakeProgram.createAccount` returns a `Transaction` preconfigured with the necessary `TransactionInstruction`s
   const stakeAccount = web3.Keypair.generate();
@@ -637,7 +660,6 @@ async function getStakingAccounts(publicKey, dontGetDetails) {
     const rentExemptReserve = new BigNumber(stakingAccount.account.data.parsed.info.meta.rentExemptReserve).div(LAMPORTS_PER_SOL).toFixed();
     const stakeData = stakingAccount.account.data.parsed.info.stake;
     const activeStake = new BigNumber(stakeData.delegation.stake).div(LAMPORTS_PER_SOL).toFixed();
-    console.log("🚀 ~ getStakingAccounts ~ activeStake:", activeStake)
     const balance = new BigNumber(stakingAccount.account.lamports).div(LAMPORTS_PER_SOL).toFixed();
 
     const obj = {
@@ -654,7 +676,6 @@ async function getStakingAccounts(publicKey, dontGetDetails) {
 
     result.push(obj);
   });
-  console.log("🚀 ~ getStakingAccounts ~ stakingAccounts:", stakingAccounts)
   if (dontGetDetails) {
     return result;
   }
@@ -662,17 +683,15 @@ async function getStakingAccounts(publicKey, dontGetDetails) {
   const delayTime = (60 / rateLimit) * 1000 + 50;
   const epochInfo = await connection.getEpochInfo();
   const currentEpoch = epochInfo.epoch
-  console.log("🚀 ~ getStakingAccounts ~ currentEpoch:", currentEpoch)
   await forEachSeries(result, async (stakeAccountInfo) => {
-    console.log("🚀 ~ awaitforEachSeries ~ stakeAccountInfo.activationEpoch:", stakeAccountInfo.activationEpoch)
     const pubkey = new web3.PublicKey(stakeAccountInfo.stakeAccount);
-    const stakeStatus = await connection.getStakeActivation(pubkey);
-    const status = stakeStatus.state;
+    const stakeStatus = await getStakeActivation(connection,pubkey);
+    const status = stakeStatus.status;
+    // const status =''
     await sleep(delayTime);
     let rewards = 0
     if(BigNumber(stakeAccountInfo.activationEpoch).lt(currentEpoch)){
       const rewardInfo = await getInflationReward(connection, pubkey, stakeAccountInfo.activationEpoch + 1);
-      console.log("🚀 ~ awaitforEachSeries ~ rewardInfo:", rewardInfo)
       if(rewardInfo){
         const stakeAmount = BigNumber(rewardInfo?.inflationReward?.postBalance).minus(rewardInfo?.inflationReward?.amount).toFixed()
         rewards = BigNumber(stakeAccountInfo.balance).minus(BigNumber(stakeAmount).div(LAMPORTS_PER_SOL)).toFixed()
@@ -683,7 +702,7 @@ async function getStakingAccounts(publicKey, dontGetDetails) {
     stakeAccountInfo.staked = BigNumber(stakeAccountInfo.activeStake).toFixed();
     stakeAccountInfo.activeStake = stakeAccountInfo.activeStake 
   });
-
+  console.log(result, 'result');
   return result;
 }
 
@@ -783,7 +802,7 @@ async function unstakeSol({
   privateKey,
   stakePubkey,
 }) {
-  const wallet = privateKey ? new web3.Account(bs58.decode(privateKey)) : web3.Keypair.generate();
+  const wallet = privateKey ? new web3.Account(bs58?.default?.decode(privateKey)) : web3.Keypair.generate();
   const connection = _getConnection();
   // At anytime we can choose to deactivate our stake. Our stake account must be inactive before we can withdraw funds.
   const deactivateTx = web3.StakeProgram.deactivate({
@@ -809,7 +828,7 @@ async function getUnstakeFeeSol({
     authorizedPubkey: new web3.PublicKey(publicKey),
   });
   const connection = _getConnection();
-  const recentBlockhash = await connection.getRecentBlockhash();
+  const recentBlockhash = await connection.getLatestBlockhash();
   const manualTransaction = new web3.Transaction({
     recentBlockhash: recentBlockhash.blockhash,
     feePayer: new web3.PublicKey(publicKey),
@@ -826,7 +845,7 @@ async function withdrawStakeSol({
   stakePubkey,
 }) {
   const stakePubkey2 = new web3.PublicKey(stakePubkey);
-  const wallet = privateKey ? new web3.Account(bs58.decode(privateKey)) : web3.Keypair.generate();
+  const wallet = privateKey ? new web3.Account(bs58?.default?.decode(privateKey)) : web3.Keypair.generate();
   const connection = _getConnection();
 
   // Check that stake is available
@@ -860,7 +879,7 @@ async function getWithdrawStakeFeeSol({
     lamports: 0,
   });
 
-  const recentBlockhash = await connection.getRecentBlockhash();
+  const recentBlockhash = await connection.get();
   const manualTransaction = new web3.Transaction({
     recentBlockhash: recentBlockhash.blockhash,
     feePayer: new web3.PublicKey(publicKey),
@@ -915,5 +934,5 @@ const service = {
   memo: "ROCKX-MS-SOL"
 };
 
-export default service;
-// module.exports = service;
+//export default service; // for deploy
+module.exports = service; // for test jest
