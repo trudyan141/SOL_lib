@@ -7,7 +7,6 @@ const BigNumber = require("bignumber.js");
 const axios = require("axios");
 const web3 = require("@solana/web3.js");
 const { getStakeActivation } = require('@anza-xyz/solana-rpc-get-stake-activation');
-console.log("🚀 ~ getStakeActivation:", getStakeActivation)
 const { forEachSeries } = require("p-iteration");
 
 const { LAMPORTS_PER_SOL, Transaction, SystemProgram , PublicKey} = web3;
@@ -531,8 +530,13 @@ async function createStakeTx({
   votePubkey,
   memo,
 }) {
-  const wallet = privateKey ? new web3.Account(bs58?.default?.decode(privateKey)) : web3.Keypair.generate();
-  console.log("🚀 ~ wallet:", wallet)
+  const secretKey32Bytes = bs58?.default?.decode(privateKey);
+    // get keyPair
+  const keyPairNaCl = nacl.sign.keyPair.fromSeed(secretKey32Bytes);
+  const keyPair = web3.Keypair.fromSecretKey(keyPairNaCl.secretKey);
+  // get secretKey (64 bytes)
+  const secretKey64Bytes = keyPair.secretKey;
+  const wallet = privateKey ? keyPair : web3.Keypair.generate();
   // Setup a transaction to create our stake account
   // Note: `StakeProgram.createAccount` returns a `Transaction` preconfigured with the necessary `TransactionInstruction`s
   const stakeAccount = web3.Keypair.generate();
@@ -544,28 +548,26 @@ async function createStakeTx({
   });
 
   const createStakeAccountTx = web3.StakeProgram.createAccount({
-    fromPubkey: wallet.publicKey,
+    fromPubkey: new web3.PublicKey(wallet.publicKey),
     // Here we set two authorities: Stake Authority and Withdrawal Authority. Both are set to our wallet.
-    authorized: new web3.Authorized(wallet.publicKey, wallet.publicKey),
+    authorized: new web3.Authorized(new web3.PublicKey(wallet.publicKey), new web3.PublicKey(wallet.publicKey)),
     lamports: new BigNumber(amountToStake).times(LAMPORTS_PER_SOL).toFixed(),
-    lockup: new web3.Lockup(0, 0, wallet.publicKey), // Optional. We'll set this to 0 for demonstration purposes.
-    stakePubkey: stakeAccount.publicKey,
+    lockup: new web3.Lockup(0, 0, new web3.PublicKey(wallet.publicKey)), // Optional. We'll set this to 0 for demonstration purposes.
+    stakePubkey: new web3.PublicKey(stakeAccount.publicKey),
   });
   manualTransaction.add(createStakeAccountTx);
-
   // We can then delegate our stake to the voteAccount
   const delegateTx = web3.StakeProgram.delegate({
-    stakePubkey: stakeAccount.publicKey,
-    authorizedPubkey: wallet.publicKey,
+    stakePubkey: new web3.PublicKey(stakeAccount.publicKey),
+    authorizedPubkey: new web3.PublicKey(wallet.publicKey),
     votePubkey: new web3.PublicKey(votePubkey),
   });
   manualTransaction.add(delegateTx);
-
   if (memo) {
     manualTransaction.add(
       new web3.TransactionInstruction({
         keys: [{
-          pubkey: wallet.publicKey,
+          pubkey: new web3.PublicKey(wallet.publicKey),
           isSigner: true,
           isWritable: true
         }],
@@ -574,15 +576,13 @@ async function createStakeTx({
       })
     );
   }
-  console.log(manualTransaction,'createStakeTx=>manualTransaction');
-  console.log(wallet,'createStakeTx=>wallet');
-  console.log(stakeAccount,'createStakeTx=>stakeAccount');
   return {
     stakeTransaction: manualTransaction,
     wallet,
     stakeAccount,
   };
 }
+
 
 async function stakeSol({
   privateKey,
@@ -605,17 +605,25 @@ async function stakeSol({
     memo,
   });
 
+
   const connection = _getConnection();
-  console.log(stakeTransaction,"stakeTransaction");
-  console.log(connection,"connection");
+  const signers = [{
+    publicKey: new web3.PublicKey(wallet.publicKey),
+    secretKey: wallet.secretKey
+  },
+  {
+    publicKey: new web3.PublicKey(stakeAccount.publicKey),
+    secretKey: stakeAccount.secretKey
+  }]
   try{
     const createStakeAccountTxId = await web3.sendAndConfirmTransaction(
       connection,
       stakeTransaction,
-      [
-        wallet,
-        stakeAccount, // Since we're creating a new stake account, we have that account sign as well
-      ]
+      signers,
+      // [
+      //   wallet,
+      //   stakeAccount, // Since we're creating a new stake account, we have that account sign as well
+      // ]
     );
     console.log(`Stake account created. Tx Id: ${createStakeAccountTxId}`);
     /*
@@ -802,7 +810,14 @@ async function unstakeSol({
   privateKey,
   stakePubkey,
 }) {
-  const wallet = privateKey ? new web3.Account(bs58?.default?.decode(privateKey)) : web3.Keypair.generate();
+  //const wallet = privateKey ? new web3.Account(bs58?.default?.decode(privateKey)) : web3.Keypair.generate();
+   const secretKey32Bytes = bs58?.default?.decode(privateKey);
+    // get keyPair
+  const keyPairNaCl = nacl.sign.keyPair.fromSeed(secretKey32Bytes);
+  const keyPair = web3.Keypair.fromSecretKey(keyPairNaCl.secretKey);
+  // get secretKey (64 bytes)
+  const secretKey64Bytes = keyPair.secretKey;
+  const wallet = privateKey ? keyPair : web3.Keypair.generate();
   const connection = _getConnection();
   // At anytime we can choose to deactivate our stake. Our stake account must be inactive before we can withdraw funds.
   const deactivateTx = web3.StakeProgram.deactivate({
