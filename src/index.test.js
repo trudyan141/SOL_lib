@@ -37,4 +37,12 @@ test('unstakeSol', async () => {
   const stakePubkey = `A74mef97P2EYqP7QtaNUBUgHtR7fDftTWsFFTU5QsEAT`;
   const rs = await sol?.unstakeSol({ privateKey, stakePubkey});
   console.log("🚀 ~ unstakeSol ~ rs:", rs)
+}, 500000);
+
+test('withdrawStakeSol', async () => {
+  // PRIVATE_KEY=your_private_key_here yarn jest -t 'withdrawStakeSol'
+  let privateKey = process.env.PRIVATE_KEY;
+  const stakePubkey = `A74mef97P2EYqP7QtaNUBUgHtR7fDftTWsFFTU5QsEAT`;
+  const rs = await sol?.withdrawStakeSol({ privateKey, stakePubkey});
+  console.log("🚀 ~ withdrawStakeSol ~ rs:", rs)
 },500000);

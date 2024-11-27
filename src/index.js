@@ -815,9 +815,8 @@ async function unstakeSol({
     // get keyPair
   const keyPairNaCl = nacl.sign.keyPair.fromSeed(secretKey32Bytes);
   const keyPair = web3.Keypair.fromSecretKey(keyPairNaCl.secretKey);
-  // get secretKey (64 bytes)
-  const secretKey64Bytes = keyPair.secretKey;
   const wallet = privateKey ? keyPair : web3.Keypair.generate();
+
   const connection = _getConnection();
   // At anytime we can choose to deactivate our stake. Our stake account must be inactive before we can withdraw funds.
   const deactivateTx = web3.StakeProgram.deactivate({
@@ -860,7 +859,13 @@ async function withdrawStakeSol({
   stakePubkey,
 }) {
   const stakePubkey2 = new web3.PublicKey(stakePubkey);
-  const wallet = privateKey ? new web3.Account(bs58?.default?.decode(privateKey)) : web3.Keypair.generate();
+  //const wallet = privateKey ? new web3.Account(bs58?.default?.decode(privateKey)) : web3.Keypair.generate();
+  const secretKey32Bytes = bs58?.default?.decode(privateKey);
+    // get keyPair
+  const keyPairNaCl = nacl.sign.keyPair.fromSeed(secretKey32Bytes);
+  const keyPair = web3.Keypair.fromSecretKey(keyPairNaCl.secretKey);
+  const wallet = privateKey ? keyPair : web3.Keypair.generate();
+  
   const connection = _getConnection();
 
   // Check that stake is available
