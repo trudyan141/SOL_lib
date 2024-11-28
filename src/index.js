@@ -518,7 +518,9 @@ async function getStakeFeeSol({
     votePubkey,
     memo,
   });
+  console.log("🚀 ~ stakeTransaction:", stakeTransaction)
   const fee = await getEstimatedFee(stakeTransaction);
+  console.log("🚀 ~ fee:", fee)
 
   return fee;
 }
@@ -530,13 +532,16 @@ async function createStakeTx({
   votePubkey,
   memo,
 }) {
-  const secretKey32Bytes = bs58?.default?.decode(privateKey);
+  let wallet = null;
+  if (privateKey) {
+    const secretKey32Bytes = bs58?.default?.decode(privateKey);
     // get keyPair
-  const keyPairNaCl = nacl.sign.keyPair.fromSeed(secretKey32Bytes);
-  const keyPair = web3.Keypair.fromSecretKey(keyPairNaCl.secretKey);
-  // get secretKey (64 bytes)
-  const secretKey64Bytes = keyPair.secretKey;
-  const wallet = privateKey ? keyPair : web3.Keypair.generate();
+    const keyPairNaCl = nacl.sign.keyPair.fromSeed(secretKey32Bytes);
+    const keyPair = web3.Keypair.fromSecretKey(keyPairNaCl.secretKey);
+    wallet = keyPair;
+  } else {
+    wallet = web3.Keypair.generate();
+  }
   // Setup a transaction to create our stake account
   // Note: `StakeProgram.createAccount` returns a `Transaction` preconfigured with the necessary `TransactionInstruction`s
   const stakeAccount = web3.Keypair.generate();
@@ -576,6 +581,7 @@ async function createStakeTx({
       })
     );
   }
+  console.log("🚀 ~ manualTransaction:", manualTransaction)
   return {
     stakeTransaction: manualTransaction,
     wallet,
@@ -899,7 +905,7 @@ async function getWithdrawStakeFeeSol({
     lamports: 0,
   });
 
-  const recentBlockhash = await connection.get();
+  const recentBlockhash = await connection.getLatestBlockhash();
   const manualTransaction = new web3.Transaction({
     recentBlockhash: recentBlockhash.blockhash,
     feePayer: new web3.PublicKey(publicKey),

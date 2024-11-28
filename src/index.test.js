@@ -31,10 +31,20 @@ test('stakeSol', async () => {
   console.log("🚀 ~ stakeSol ~ rs:", rs)
 }, 500000);
 
+test('getStakeFeeSol', async () => {
+  //  yarn jest -t 'getStakeFeeSol'
+  let publicKey = '9hpZwqRNsuSR7EMqRALR1C49djQHCDe9yGFZNwwEH818';
+  let amountToStake = 0.01228288;
+  let privateKey = process.env.PRIVATE_KEY;
+  const votePubkey = `AGXZemZbyZjz5NBhufcob2pf8AXnr9HaGFUGNCfooWrB`;
+  const rs = await sol?.getStakeFeeSol({ publicKey,privateKey, amountToStake, votePubkey});
+  console.log("🚀 ~ stakeSol ~ rs:", rs)
+}, 500000);
+
 test('unstakeSol', async () => {
   // PRIVATE_KEY=your_private_key_here yarn jest -t 'unstakeSol'
   let privateKey = process.env.PRIVATE_KEY;
-  const stakePubkey = `A74mef97P2EYqP7QtaNUBUgHtR7fDftTWsFFTU5QsEAT`;
+  const stakePubkey = `Gf8u6XkxogSA2Kt3RTBVu3t8TRFM2dhwbhgWFQ9JG2jf`;
   const rs = await sol?.unstakeSol({ privateKey, stakePubkey});
   console.log("🚀 ~ unstakeSol ~ rs:", rs)
 }, 500000);
@@ -45,4 +55,12 @@ test('withdrawStakeSol', async () => {
   const stakePubkey = `A74mef97P2EYqP7QtaNUBUgHtR7fDftTWsFFTU5QsEAT`;
   const rs = await sol?.withdrawStakeSol({ privateKey, stakePubkey});
   console.log("🚀 ~ withdrawStakeSol ~ rs:", rs)
-},500000);
+}, 500000);
+
+test('getWithdrawStakeFeeSol', async () => {
+  //  yarn jest -t 'getWithdrawStakeFeeSol'
+  let publicKey = '9hpZwqRNsuSR7EMqRALR1C49djQHCDe9yGFZNwwEH818';
+  let stakePubkey = "AsY2LiWRHV9ys7RLnaSeFrkyccWgUG5EbrneHmkETuuV"
+  const rs = await sol?.getWithdrawStakeFeeSol({ publicKey, stakePubkey});
+  console.log("🚀 ~ stakeSol ~ rs:", rs)
+}, 500000);
